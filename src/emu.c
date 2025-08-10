@@ -18,7 +18,6 @@ int emul(t86vm_ctx_t *ctx){
 
 	//now launch the floppy disk
 	ctx->regs.pc = 0x7c00;
-	ctx->regs.sp = 0x7c00;
 	printf("%d\n",emu86(ctx));
 	return 0;
 }
