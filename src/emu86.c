@@ -170,6 +170,14 @@ int modrm(t86vm_ctx_t *ctx,int32_t *reg,int32_t *arg2){
 	return 0;
 }
 
+void set_flags(t86vm_ctx_t *ctx,uint32_t num){
+	ctx->regs.eflags &= ~(EFLAGS_ZF | EFLAGS_PF);
+	if(num == 0){
+		ctx->regs.eflags |= EFLAGS_ZF;
+	}
+	//TODO : PF
+}
+
 int emu86i(t86vm_ctx_t *ctx){
 
 	if(setjmp(ctx->jmperr)){
@@ -232,8 +240,10 @@ int emu86i(t86vm_ctx_t *ctx){
 	case 0x45:
 	case 0x46:
 	case 0x47: //inc v?
-		//TODO : flags
+		ctx->regs.eflags &= ~(EFLAGS_SF | EFLAGS_AF | EFLAGS_SF | EFLAGS_ZF);
+		if((*reg(ctx,op - 0x40) & 0xf) == 0xf)ctx->regs.eflags |= EFLAGS_AF;
 		printf("inc %x to %x\n",op - 0x40,++*reg(ctx,op - 0x40));
+		set_flags(ctx,*reg(ctx,op - 0x40));
 		break;
 	case 0x48:
 	case 0x49:
@@ -244,6 +254,7 @@ int emu86i(t86vm_ctx_t *ctx){
 	case 0x4e:
 	case 0x4f: //dec v?
 		//TODO : flags
+		ctx->regs.eflags &= ~(EFLAGS_SF | EFLAGS_AF | EFLAGS_SF | EFLAGS_ZF);
 		printf("dec %x to %x\n",op - 0x48,--*reg(ctx,op - 0x48));
 		break;
 	case 0x50:
@@ -276,7 +287,7 @@ int emu86i(t86vm_ctx_t *ctx){
 		case 0x74: //jz/jnz
 			flag = EFLAGS_ZF;
 			break;
-		case 0x74: //jbe/ja
+		case 0x76: //jbe/ja
 			flag = EFLAGS_CF | EFLAGS_ZF;
 			break;
 		}
@@ -400,6 +411,7 @@ void emu86_dump(t86vm_ctx_t *ctx){
 	printf("ds = %x\n",ctx->regs.ds);
 	printf("ss = %x\n",ctx->regs.ss);
 	printf("pc = %x\n",ctx->regs.pc);
+	printf("eflags = %x\n",ctx->regs.eflags);
 }
 
 //return on first interrupt
