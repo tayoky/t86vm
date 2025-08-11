@@ -217,26 +217,146 @@ int emu86i(t86vm_ctx_t *ctx){
 	
 	int32_t arg1;
 	int32_t arg2;
+	int32_t arg3;
 	switch(op){
+	case 0x00: //add (r/m and reg) b
+	case 0x01: //add (r/m and reg) v
+	case 0x02: //add (reg and r/m) b
+	case 0x03: //add (reg and r/m) v
+	case 0x04: //add (al and imm)  b
+	case 0x05: //add (ax and imm)  v
+	case 0x08: //or  (r/m and reg) b
+	case 0x09: //or  (r/m and reg) v
+	case 0x0a: //or  (reg and r/m) b
+	case 0x0b: //or  (reg and r/m) v
+	case 0x0c: //or  (al and imm)  b
+	case 0x0d: //or  (ax and imm)  v
+	case 0x20: //and (r/m and reg) b
+	case 0x21: //and (r/m and reg) v
+	case 0x22: //and (reg and r/m) b
+	case 0x23: //and (reg and r/m) v
+	case 0x24: //and (al and imm)  b
+	case 0x25: //and (ax and imm)  v
+	case 0x28: //sub (r/m and reg) b
+	case 0x29: //sub (r/m and reg) v
+	case 0x2a: //sub (reg and r/m) b
+	case 0x2b: //sub (reg and r/m) v
+	case 0x2c: //sub (al and imm)  b
+	case 0x2d: //sub (ax and imm)  v
+	case 0x30: //xor (r/m xor reg) b
+	case 0x31: //xor (r/m xor reg) v
+	case 0x32: //xor (reg xor r/m) b
+	case 0x33: //xor (reg xor r/m) v
+	case 0x34: //xor (al xor imm)  b
+	case 0x35: //xor (ax and imm)  v
+	case 0x38: //cmp (r/m and reg) b
+	case 0x39: //cmp (r/m and reg) v
+	case 0x3a: //cmp (reg and r/m) b
+	case 0x3b: //cmp (reg and r/m) v
+	case 0x3c: //cmp (al and imm)  b
+	case 0x3d: //cmp (ax and imm)  v
+		;uint8_t isreg;
+		if(op % 8 == 0x04){
+			//al and imm b
+			arg1 = *reg8(ctx,0);
+			arg2 = read_u8(ctx);
+			arg3 = 0;
+			isreg = 1;
+		} else if (op % 8 == 0x05){
+			//ax and imm v
+			arg1 = *reg(ctx,0);
+			arg2 = read_u16(ctx);
+			arg3 = 0;
+			isreg = 1;
+		} else {
+			uint8_t mod = modrm(ctx,&arg1,&arg2);
+			if(op % 8 >= 0x02){
+				//store in reg
+				isreg = 1;
+				arg3 = arg1;
+			} else {
+				//store in r/m
+				isreg = mod;
+				arg3 = arg2;
+			}
+			if(mod){
+				//r/m is reg
+				if(op % 2){
+					arg2 = *reg(ctx,arg2);
+				} else {
+					arg2 = *reg8(ctx,arg2);
+				}
+			} else {
+				//r/m is mem address
+				arg2 = emu86_read(ctx,ctx->regs.ds,arg2,(op % 2) ? sizeof(uint16_t) : sizeof(uint8_t));
+			}
+
+			if(op % 2){
+				arg1 = *reg(ctx,arg1);
+			} else {
+				arg1 = *reg8(ctx,arg1);
+			}
+		}
+		//TODO : flags 
+		switch((op/0x08)*0x08){
+		case 0x00: //add
+			arg1 += arg2;
+			break;
+		case 0x07: //or
+			arg1 |= arg2;
+			break;
+		case 0x20: //and
+			arg1 &= arg2;
+			break;
+		case 0x28: //sub
+			arg1 -= arg2;
+			break;
+		case 0x30: //xor
+			error("xor");
+			arg1 ^= arg2;
+			break;
+		case 0x38: //cmp
+			//TODO : cmp
+			error("TODO : cmp");
+			break;
+		}
+
+		if(op >= 0x38){
+			//don't store anything for cmp
+			break;
+		}
+		//place the result back
+		if(isreg){
+			if(op % 2){
+				*reg(ctx,arg3) = arg1;
+			} else {
+				*reg8(ctx,arg3) = arg1;
+			}
+		} else {
+			emu86_write(ctx,ctx->regs.ds,arg3,arg1,(op % 2) ? sizeof(uint16_t) : sizeof(uint8_t));
+		}
+		break;
 	case 0x06: //push (es)
 		push_u16(ctx,ctx->regs.es);
 		break;
 	case 0x07: //pop (es)
 		ctx->regs.es = pop_u16(ctx);
 		break;
+	case 0x0e: //push (cs)
+		push_u16(ctx,ctx->regs.cs);
+		break;
+		//no pop cs ???
 	case 0x16: //push (ss)
 		push_u16(ctx,ctx->regs.ss);
 		break;
 	case 0x17: //pop (ss)
 		ctx->regs.ss = pop_u16(ctx);
 		break;
-	case 0x31:
-	case 0x33: //xor
-		//TODO : diff between 31 and 33 ????
-		if(modrm(ctx,&arg1,&arg2) != 1){
-			longjmp(ctx->jmperr,0);
-		}
-		*reg(ctx,arg1) ^= *reg(ctx,arg2);
+	case 0x1e: //push (ds)
+		push_u16(ctx,ctx->regs.ds);
+		break;
+	case 0x1f: //pop (ds)
+		ctx->regs.ds = pop_u16(ctx);
 		break;
 	case 0x40:
 	case 0x41:
