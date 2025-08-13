@@ -144,7 +144,7 @@ int modrm(t86vm_ctx_t *ctx,int32_t *reg,int32_t *arg2){
 		break;
 	}
 
-	printf("mod : %x rm : %x\n",mod,rm);
+	//printf("mod : %x rm : %x\n",mod,rm);
 
 	switch(rm){
 	case 0:
@@ -460,13 +460,6 @@ int emu86i(t86vm_ctx_t *ctx){
 			}
 		}
 		break;
-	case 0x8e: //mov (reg to seg)
-		if(modrm(ctx,&arg1,&arg2) != 1){
-			longjmp(ctx->jmperr,0);
-		}
-		printf("set seg %d to reg %d\n",arg2,arg1);
-		*seg(ctx,arg2) = *reg(ctx,arg1);
-		break;
 	case 0x88: //mov (reg to r/m) b
 		if(modrm(ctx,&arg1,&arg2)){
 			*reg8(ctx,arg2) = *reg8(ctx,arg1);
@@ -494,6 +487,34 @@ int emu86i(t86vm_ctx_t *ctx){
 			*reg(ctx,arg1) = *reg(ctx,arg2);
 		} else {
 			*reg(ctx,arg1) = emu86_read(ctx,ctx->regs.ds,arg2,sizeof(uint16_t));
+		}
+		break;
+	case 0x8c: //mov (seg to r/m)
+		if(modrm(ctx,&arg1,&arg2)){
+			*reg(ctx,arg2) = *seg(ctx,arg1);
+		} else {
+			emu86_write(ctx,ctx->regs.ds,arg2,*seg(ctx,arg1),sizeof(uint16_t));
+		}
+		break;
+	case 0x8d: //lea
+		if(modrm(ctx,&arg1,&arg2) != 0){
+			longjmp(ctx->jmperr,0);
+		}
+		*reg(ctx,arg1) = (uint16_t)arg2;
+		break;
+	case 0x8e: //mov (r/m to seg)
+		if(modrm(ctx,&arg1,&arg2)){
+			printf("set seg %d to reg %d\n",arg1,arg2);
+			*seg(ctx,arg1) = *reg(ctx,arg2);
+		} else {
+			*seg(ctx,arg1) = emu86_read(ctx,ctx->regs.ds,arg2,sizeof(uint16_t));
+		}
+		break;
+	case 0x8f: //pop (r/m) v
+		if(modrm(ctx,&arg1,&arg2)){
+			*reg(ctx,arg2) = pop_u16(ctx);
+		} else {
+			emu86_write(ctx,ctx->regs.ds,arg2,pop_u16(ctx),sizeof(uint16_t));
 		}
 		break;
 	case 0x90: //nop
@@ -556,9 +577,25 @@ int emu86i(t86vm_ctx_t *ctx){
 		push_u16(ctx,ctx->regs.pc);
 		ctx->regs.pc += arg1;
 		break;
+	case 0xe9: //jmp (short) v
+		arg1 = (int16_t)read_u16(ctx);
+		ctx->regs.pc += arg1;
+		break;
+	case 0xea: //jmp (long) p
+		arg1 = read_u16(ctx);
+		arg2 = read_u16(ctx);
+		ctx->regs.pc = (uint16_t)arg1;
+		ctx->regs.cs = (uint16_t)arg2;
+		break;
 	case 0xeb: //jmp (short) b
 		arg1 = (int8_t)read_u8(ctx);
 		ctx->regs.pc += arg1;
+		break;
+	case 0xf8: //clc
+		ctx->regs.eflags &= ~EFLAGS_CF;
+		break;
+	case 0xf9: //stc
+		ctx->regs.eflags |= EFLAGS_CF;
 		break;
 	case 0xfa: //cli
 		ctx->regs.eflags &= ~EFLAGS_IF;
