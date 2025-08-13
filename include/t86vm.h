@@ -6,15 +6,15 @@
 #include <stdio.h>
 
 typedef struct regs {
-	uint16_t ax;
-	uint16_t bx;
-	uint16_t cx;
-	uint16_t dx;
-	uint16_t pc;
-	uint16_t sp;
-	uint16_t bp;
-	uint16_t si;
-	uint16_t di;
+	int16_t ax;
+	int16_t bx;
+	int16_t cx;
+	int16_t dx;
+	int16_t pc;
+	int16_t sp;
+	int16_t bp;
+	int16_t si;
+	int16_t di;
 	uint16_t es;
 	uint16_t cs;
 	uint16_t ss;

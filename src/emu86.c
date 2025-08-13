@@ -56,16 +56,16 @@ static void push_u16(t86vm_ctx_t *ctx,uint16_t data){
 }
 
 static uint8_t pop_u8(t86vm_ctx_t *ctx){
-	return (uint8_t)emu86_read(ctx,ctx->regs.ss,ctx->regs.sp++,sizeof(uint8_t));
+	return (uint8_t)emu86_read(ctx,ctx->regs.ss,(uint16_t)ctx->regs.sp++,sizeof(uint8_t));
 }
 
 static uint16_t pop_u16(t86vm_ctx_t *ctx){
-	uint16_t data = (uint16_t)emu86_read(ctx,ctx->regs.ss,ctx->regs.sp,sizeof(uint16_t));
+	uint16_t data = (uint16_t)emu86_read(ctx,ctx->regs.ss,(uint16_t)ctx->regs.sp,sizeof(uint16_t));
 	ctx->regs.sp += 2;
 	return data;
 }
 
-uint16_t *reg(t86vm_ctx_t *ctx,uint8_t reg){
+static int16_t *reg(t86vm_ctx_t *ctx,uint8_t reg){
 	switch(reg){
 	case 0:
 		return &ctx->regs.ax;
@@ -89,11 +89,11 @@ uint16_t *reg(t86vm_ctx_t *ctx,uint8_t reg){
 	}
 }
 
-uint8_t *reg8(t86vm_ctx_t *ctx,uint8_t r){
-	return ((uint8_t *)reg(ctx,r%4)) + (r>=4);
+static int8_t *reg8(t86vm_ctx_t *ctx,uint8_t r){
+	return ((int8_t *)reg(ctx,r%4)) + (r>=4);
 }
 
-uint16_t *seg(t86vm_ctx_t *ctx,uint8_t seg){
+static uint16_t *seg(t86vm_ctx_t *ctx,uint8_t seg){
 	switch(seg){
 	case 0:
 		return &ctx->regs.es;
@@ -148,38 +148,41 @@ int modrm(t86vm_ctx_t *ctx,int32_t *reg,int32_t *arg2){
 
 	switch(rm){
 	case 0:
-		*arg2 = ctx->regs.bx + ctx->regs.si + dis;
+		*arg2 = (uint16_t)ctx->regs.bx + (uint16_t)ctx->regs.si + dis;
 		break;
 	case 1:
-		*arg2 = ctx->regs.bx + ctx->regs.di + dis;
+		*arg2 = (uint16_t)ctx->regs.bx + (uint16_t)ctx->regs.di + dis;
 		break;
 	case 2:
-		*arg2 = ctx->regs.bp + ctx->regs.si + dis;
+		*arg2 = (uint16_t)ctx->regs.bp + (uint16_t)ctx->regs.si + dis;
 		break;
 	case 3:
-		*arg2 = ctx->regs.bp + ctx->regs.di + dis;
+		*arg2 = (uint16_t)ctx->regs.bp + (uint16_t)ctx->regs.di + dis;
 		break;
 	case 4:
-		*arg2 = ctx->regs.si + dis;
+		*arg2 = (uint16_t)ctx->regs.si + dis;
 		break;
 	case 5:
-		*arg2 = ctx->regs.di + dis;
+		*arg2 = (uint16_t)ctx->regs.di + dis;
 		break;
 	case 6:
-		*arg2 = ctx->regs.bp + dis;
+		*arg2 = (uint16_t)ctx->regs.bp + dis;
 		break;
 	case 7:
-		*arg2 = ctx->regs.bx + dis;
+		*arg2 = (uint16_t)ctx->regs.bx + dis;
 		break;
 	}
 
 	return 0;
 }
 
-void set_flags(t86vm_ctx_t *ctx,uint32_t num){
-	ctx->regs.eflags &= ~(EFLAGS_ZF | EFLAGS_PF);
+void set_flags(t86vm_ctx_t *ctx,int32_t num){
+	ctx->regs.eflags &= ~(EFLAGS_ZF | EFLAGS_PF | EFLAGS_SF);
 	if(num == 0){
 		ctx->regs.eflags |= EFLAGS_ZF;
+	}
+	if(num < 0){
+		ctx->regs.eflags |= EFLAGS_SF;
 	}
 	//TODO : PF
 }
@@ -305,7 +308,8 @@ int emu86i(t86vm_ctx_t *ctx){
 				arg1 = *reg8(ctx,arg1);
 			}
 		}
-		//TODO : flags for all op 
+		//FIXME : i think SF might be broken on bits ops
+		//TODO : CF and OF flags
 		ctx->regs.eflags &= ~(EFLAGS_SF | EFLAGS_AF | EFLAGS_SF | EFLAGS_ZF);
 		switch((op/0x08)*0x08){
 		case 0x00: //add
@@ -320,9 +324,6 @@ int emu86i(t86vm_ctx_t *ctx){
 		case 0x38: //cmp
 		case 0x28: //sub
 			//TODO : cary + overflow
-			if(arg2 > arg1){
-				ctx->regs.eflags |= EFLAGS_SF;
-			}
 			arg1 -= arg2;
 			break;
 		case 0x30: //xor
@@ -340,9 +341,9 @@ int emu86i(t86vm_ctx_t *ctx){
 		//place the result back
 		if(isreg){
 			if(op % 2){
-				*reg(ctx,arg3) = arg1;
+				*reg(ctx,arg3) = (int16_t)arg1;
 			} else {
-				*reg8(ctx,arg3) = arg1;
+				*reg8(ctx,arg3) = (int8_t)arg1;
 			}
 		} else {
 			emu86_write(ctx,ctx->regs.ds,arg3,arg1,(op % 2) ? sizeof(uint16_t) : sizeof(uint8_t));
@@ -393,9 +394,6 @@ int emu86i(t86vm_ctx_t *ctx){
 	case 0x4f: //dec v?
 		//TODO : AF flag
 		ctx->regs.eflags &= ~(EFLAGS_SF | EFLAGS_AF | EFLAGS_SF | EFLAGS_ZF);
-		if(*reg(ctx,op -0x48) == 0){
-			ctx->regs.eflags |= EFLAGS_SF;
-		}
 		printf("dec %x to %x\n",op - 0x48,--*reg(ctx,op - 0x48));
 		set_flags(ctx,*reg(ctx,op-0x48));
 		break;
@@ -426,7 +424,11 @@ int emu86i(t86vm_ctx_t *ctx){
 	case 0x74:
 	case 0x75:
 	case 0x76:
-	case 0x77://jxx (short) b
+	case 0x77:
+	case 0x78:
+	case 0x79:
+	case 0x7a:
+	case 0x7b: //jxx (short) b
 		arg1 = (int8_t)read_u8(ctx);
 		uint16_t flag;
 		switch(op % 2){
@@ -441,6 +443,11 @@ int emu86i(t86vm_ctx_t *ctx){
 			break;
 		case 0x76: //jbe/ja
 			flag = EFLAGS_CF | EFLAGS_ZF;
+		case 0x78: //js/jns
+			flag = EFLAGS_SF;
+			break;
+		case 0x7a: //jpe/jpo
+			flag = EFLAGS_PF;
 			break;
 		}
 		if(op % 2){
@@ -493,13 +500,13 @@ int emu86i(t86vm_ctx_t *ctx){
 		break;
 	case 0xac: //lodsb
 	case 0xad: //lodsw
-		size_t size;
+		;size_t size;
 		if(op == 0xac){
 			size = 1;
-			*reg8(ctx,0) = emu86_read(ctx,ctx->regs.ds,ctx->regs.si,size);
+			*reg8(ctx,0) = emu86_read(ctx,ctx->regs.ds,(uint16_t)ctx->regs.si,size);
 		} else {
 			size = 2;
-			*reg(ctx,0) = (uint16_t)emu86_read(ctx,ctx->regs.ds,ctx->regs.si,size);
+			*reg(ctx,0) = (uint16_t)emu86_read(ctx,ctx->regs.ds,(uint16_t)ctx->regs.si,size);
 		}
 
 		if(ctx->regs.eflags & EFLAGS_DF){
@@ -574,21 +581,21 @@ int emu86i(t86vm_ctx_t *ctx){
 
 void emu86_dump(t86vm_ctx_t *ctx){
 	puts("dump :");
-	printf("ax = %x\n",ctx->regs.ax);
-	printf("bx = %x\n",ctx->regs.bx);
-	printf("cx = %x\n",ctx->regs.cx);
-	printf("dx = %x\n",ctx->regs.dx);
-	printf("sp = %x\n",ctx->regs.sp);
-	printf("bp = %x\n",ctx->regs.bp);
-	printf("si = %x\n",ctx->regs.si);
-	printf("di = %x\n",ctx->regs.di);
-	printf("es = %x\n",ctx->regs.es);
-	printf("cs = %x\n",ctx->regs.cs);
-	printf("ds = %x\n",ctx->regs.ds);
-	printf("ss = %x\n",ctx->regs.ss);
-	printf("fs = %x\n",ctx->regs.fs);
-	printf("pc = %x\n",ctx->regs.pc);
-	printf("eflags = %x\n",ctx->regs.eflags);
+	printf("ax = %hx\n",ctx->regs.ax);
+	printf("bx = %hx\n",ctx->regs.bx);
+	printf("cx = %hx\n",ctx->regs.cx);
+	printf("dx = %hx\n",ctx->regs.dx);
+	printf("sp = %hx\n",ctx->regs.sp);
+	printf("bp = %hx\n",ctx->regs.bp);
+	printf("si = %hx\n",ctx->regs.si);
+	printf("di = %hx\n",ctx->regs.di);
+	printf("es = %hx\n",ctx->regs.es);
+	printf("cs = %hx\n",ctx->regs.cs);
+	printf("ds = %hx\n",ctx->regs.ds);
+	printf("ss = %hx\n",ctx->regs.ss);
+	printf("fs = %hx\n",ctx->regs.fs);
+	printf("pc = %hx\n",ctx->regs.pc);
+	printf("eflags = %hx\n",ctx->regs.eflags);
 }
 
 //return on first interrupt
