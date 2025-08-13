@@ -195,6 +195,17 @@ void emu86_int(t86vm_ctx_t *ctx,uint8_t n){
 	}
 }
 
+//handle i/o
+void emu86_out(t86vm_ctx_t *ctx,uint16_t port,uint32_t data,size_t size){
+	(void)ctx;
+	printf("out port : 0x%x data : 0x%x size : %zu\n",port,data,size);
+}
+uint32_t emu86_in(t86vm_ctx_t *ctx,uint16_t port,size_t size){
+	(void)ctx;
+	printf("intb port : 0x%x size : %zu\n",port,size);
+	return 0;
+}
+
 int emu86i(t86vm_ctx_t *ctx){
 
 	if(setjmp(ctx->jmperr)){
@@ -519,23 +530,35 @@ int emu86i(t86vm_ctx_t *ctx){
 		break;
 	case 0x90: //nop
 		break;
+	case 0xa4: //movsb
+	case 0xa5: //movsw
+	case 0xaa: //stosb
+	case 0xab: //stosw
 	case 0xac: //lodsb
 	case 0xad: //lodsw
-		;size_t size;
-		if(op == 0xac){
-			size = 1;
-			*reg8(ctx,0) = emu86_read(ctx,ctx->regs.ds,(uint16_t)ctx->regs.si,size);
-		} else {
-			size = 2;
-			*reg(ctx,0) = (uint16_t)emu86_read(ctx,ctx->regs.ds,(uint16_t)ctx->regs.si,size);
-		}
+		;size_t size = op % 2 ? 2 : 1;
+		size_t dis = ctx->regs.eflags& EFLAGS_DF ? -size : size;
 
-		if(ctx->regs.eflags & EFLAGS_DF){
-			ctx->regs.si -= size;
-		} else {
-			ctx->regs.si += size;
+		switch(op/2*2){
+		case 0xa4: //mov
+			;uint32_t data = emu86_read(ctx,ctx->regs.ds,(uint16_t)ctx->regs.si,size);
+			emu86_write(ctx,ctx->regs.ds,(uint16_t)ctx->regs.di,data,size);
+			ctx->regs.si += dis;
+			ctx->regs.di += dis;
+			break;
+		case 0xaa: //stoxx
+			emu86_write(ctx,ctx->regs.ds,(uint16_t)ctx->regs.di,(uint16_t)(size == 1 ? *reg8(ctx,0) : *reg(ctx,0)),size);
+			ctx->regs.di += dis;
+			break;
+		case 0xac: //lodxx
+			if(size == 1){
+				*reg8(ctx,0) = (uint16_t)emu86_read(ctx,ctx->regs.ds,(uint16_t)ctx->regs.si,size);
+			} else {
+				*reg(ctx,0) = (uint16_t)emu86_read(ctx,ctx->regs.ds,(uint16_t)ctx->regs.si,size);
+			}
+			ctx->regs.si += dis;
+			break;
 		}
-
 		break;
 	case 0xb0:
 	case 0xb1:
@@ -572,6 +595,19 @@ int emu86i(t86vm_ctx_t *ctx){
 	case 0xcd: //int (imm8)
 		emu86_int(ctx,read_u8(ctx));
 		break;
+	case 0xe4: //in (port imm8 to al) b
+		*reg8(ctx,0) = (uint16_t)emu86_in(ctx,read_u8(ctx),sizeof(uint8_t));
+		break;
+	case 0xe5: //in (port imm8 to ax) w
+		*reg(ctx,0) = (uint16_t)emu86_in(ctx,ctx->regs.dx,sizeof(uint16_t));
+		break;
+	case 0xe6: //out (port imm8 to al) b
+		emu86_out(ctx,read_u8(ctx),*reg8(ctx,0),sizeof(uint8_t));
+		break;
+	case 0xe7: //out (port imm8 to ax) w
+		emu86_out(ctx,read_u8(ctx),ctx->regs.ax,sizeof(uint16_t));
+		break;
+
 	case 0xe8: //call (short) v
 		arg1 = (int32_t)read_u16(ctx);
 		push_u16(ctx,ctx->regs.pc);
@@ -590,6 +626,18 @@ int emu86i(t86vm_ctx_t *ctx){
 	case 0xeb: //jmp (short) b
 		arg1 = (int8_t)read_u8(ctx);
 		ctx->regs.pc += arg1;
+		break;
+	case 0xec: //in (port dx to al) b
+		*reg8(ctx,0) = (uint16_t)emu86_in(ctx,ctx->regs.dx,sizeof(uint8_t));
+		break;
+	case 0xed: //in (port dx to ax) w
+		*reg(ctx,0) = (uint16_t)emu86_in(ctx,ctx->regs.dx,sizeof(uint16_t));
+		break;
+	case 0xee: //out (port dx to al) b
+		emu86_out(ctx,ctx->regs.dx,*reg8(ctx,0),sizeof(uint8_t));
+		break;
+	case 0xef: //out (port dx to ax) w
+		emu86_out(ctx,ctx->regs.dx,ctx->regs.ax,sizeof(uint16_t));
 		break;
 	case 0xf8: //clc
 		ctx->regs.eflags &= ~EFLAGS_CF;
