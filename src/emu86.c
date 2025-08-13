@@ -471,6 +471,28 @@ int emu86i(t86vm_ctx_t *ctx){
 			}
 		}
 		break;
+	case 0x86: //xchg (reg an r/m) b
+		if(modrm(ctx,&arg1,&arg2)){
+			uint8_t tmp = *reg8(ctx,arg1);
+			*reg8(ctx,arg1) = *reg8(ctx,arg2);
+			*reg8(ctx,arg2) = tmp;
+		} else {
+			uint8_t tmp = *reg8(ctx,arg1);
+			*reg8(ctx,arg1) = emu86_read(ctx,ctx->regs.ds,arg2,sizeof(uint8_t));
+			emu86_write(ctx,ctx->regs.ds,arg2,tmp,sizeof(uint8_t));
+		}
+		break;
+	case 0x87: //xchg (reg an r/m) v
+		if(modrm(ctx,&arg1,&arg2)){
+			uint16_t tmp = *reg(ctx,arg1);
+			*reg(ctx,arg1) = *reg(ctx,arg2);
+			*reg(ctx,arg2) = tmp;
+		} else {
+			uint16_t tmp = *reg(ctx,arg1);
+			*reg(ctx,arg1) = emu86_read(ctx,ctx->regs.ds,arg2,sizeof(uint16_t));
+			emu86_write(ctx,ctx->regs.ds,arg2,tmp,sizeof(uint16_t));
+		}
+		break;
 	case 0x88: //mov (reg to r/m) b
 		if(modrm(ctx,&arg1,&arg2)){
 			*reg8(ctx,arg2) = *reg8(ctx,arg1);
@@ -529,6 +551,17 @@ int emu86i(t86vm_ctx_t *ctx){
 		}
 		break;
 	case 0x90: //nop
+		break;
+	case 0x91:
+	case 0x92:
+	case 0x93:
+	case 0x94:
+	case 0x95:
+	case 0x96:
+	case 0x97: //xchg (ax and reg) v
+		;int16_t tmp = *reg(ctx,0);
+		*reg(ctx,0) = *reg(ctx,op - 0x90);
+		*reg(ctx,op - 0x90) = tmp;
 		break;
 	case 0xa4: //movsb
 	case 0xa5: //movsw
@@ -683,7 +716,6 @@ void emu86_dump(t86vm_ctx_t *ctx){
 	printf("eflags = %hx\n",ctx->regs.eflags);
 }
 
-//return on first interrupt
 int emu86(t86vm_ctx_t *ctx){
 	int ret;
 	while((ret = emu86i(ctx) )>= 0);
