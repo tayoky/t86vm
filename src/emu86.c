@@ -2,7 +2,7 @@
 
 //an simple 8086 emulator wrote by tayoky
 
-#define comp_addr(seg,reg) (((seg) << 4) | reg)
+#define comp_addr(seg,reg) (((seg) << 4) | (reg))
 
 uint8_t read_u8(t86vm_ctx_t *ctx){
 	uint32_t addr = comp_addr(ctx->regs.cs,ctx->regs.pc++);
@@ -184,6 +184,14 @@ void set_flags(t86vm_ctx_t *ctx,uint32_t num){
 	//TODO : PF
 }
 
+//handle inttrtupt
+void emu86_int(t86vm_ctx_t *ctx,uint8_t n){
+	printf("int %hhx\n",n);
+	if(n == 0x10 && *reg8(ctx,4) == 0xe){
+		printf("%c\n",*reg8(ctx,0));
+	}
+}
+
 int emu86i(t86vm_ctx_t *ctx){
 
 	if(setjmp(ctx->jmperr)){
@@ -297,7 +305,8 @@ int emu86i(t86vm_ctx_t *ctx){
 				arg1 = *reg8(ctx,arg1);
 			}
 		}
-		//TODO : flags 
+		//TODO : flags for all op 
+		ctx->regs.eflags &= ~(EFLAGS_SF | EFLAGS_AF | EFLAGS_SF | EFLAGS_ZF);
 		switch((op/0x08)*0x08){
 		case 0x00: //add
 			arg1 += arg2;
@@ -308,18 +317,21 @@ int emu86i(t86vm_ctx_t *ctx){
 		case 0x20: //and
 			arg1 &= arg2;
 			break;
+		case 0x38: //cmp
 		case 0x28: //sub
+			//TODO : cary + overflow
+			if(arg2 > arg1){
+				ctx->regs.eflags |= EFLAGS_SF;
+			}
 			arg1 -= arg2;
 			break;
 		case 0x30: //xor
 			error("xor");
 			arg1 ^= arg2;
 			break;
-		case 0x38: //cmp
-			//TODO : cmp
-			error("TODO : cmp");
-			break;
 		}
+
+		set_flags(ctx,arg1);
 
 		if(op >= 0x38){
 			//don't store anything for cmp
@@ -481,24 +493,19 @@ int emu86i(t86vm_ctx_t *ctx){
 		break;
 	case 0xac: //lodsb
 	case 0xad: //lodsw
-		arg1 = comp_addr(ctx->regs.ds,ctx->regs.si);
-		if((size_t)arg1 >= ctx->ram_size){
-			error("OOB");
-			return -1;
-		}
 		size_t size;
 		if(op == 0xac){
 			size = 1;
-			ctx->regs.ax = (ctx->regs.ax & ~0xff) | ((uint8_t)ctx->ram[arg1]);
+			*reg8(ctx,0) = emu86_read(ctx,ctx->regs.ds,ctx->regs.si,size);
 		} else {
 			size = 2;
-			ctx->regs.ax = (uint8_t)ctx->ram[arg1] | ((uint8_t)ctx->ram[arg1+1] << 8);
+			*reg(ctx,0) = (uint16_t)emu86_read(ctx,ctx->regs.ds,ctx->regs.si,size);
 		}
 
 		if(ctx->regs.eflags & EFLAGS_DF){
-			ctx->regs.di -= size;
+			ctx->regs.si -= size;
 		} else {
-			ctx->regs.di += size;
+			ctx->regs.si += size;
 		}
 
 		break;
@@ -523,13 +530,19 @@ int emu86i(t86vm_ctx_t *ctx){
 	case 0xbf: //mov (imm to reg) v
 		printf("set %x to %x\n",op - 0xb8,*reg(ctx,op - 0xb8) = read_u16(ctx));
 		break;
-	case 0xc5:
+	case 0xc5: //lds
 		if(modrm(ctx,&arg1,&arg2) != 0){
 			longjmp(ctx->jmperr,0);
 		}
 		*reg(ctx,arg1) = (uint32_t)arg2;
 		error("broken : lds %d %d",arg1,arg2);
 		
+		break;
+	case 0xcc: //int (3)
+		emu86_int(ctx,3);
+		break;
+	case 0xcd: //int (imm8)
+		emu86_int(ctx,read_u8(ctx));
 		break;
 	case 0xe8: //call (short) v
 		arg1 = (int32_t)read_u16(ctx);

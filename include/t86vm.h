@@ -38,7 +38,7 @@ typedef struct t86vm_ctx {
 	size_t ram_size;
 	char *ram;
 	jmp_buf jmperr;
-	uint16_t seg_overide;
+	int32_t seg_overide;
 } t86vm_ctx_t;
 
 int emul(t86vm_ctx_t *);
