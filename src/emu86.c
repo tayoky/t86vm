@@ -641,6 +641,20 @@ int emu86i(t86vm_ctx_t *ctx){
 		error("broken : lds %d %d",arg1,arg2);
 		
 		break;
+	case 0xc6: //mov (imm8 to r/m) b
+		if(modrm(ctx,&arg1,&arg2)){
+			*reg8(ctx,arg2) = read_u8(ctx);
+		} else {
+			emu86_write(ctx,ctx->regs.ds,arg2,read_u8(ctx),sizeof(uint8_t));
+		}
+		break;
+	case 0xc7: //mov (imm to r/m) v
+		if(modrm(ctx,&arg1,&arg2)){
+			*reg(ctx,arg2) = read_u16(ctx);
+		} else {
+			emu86_write(ctx,ctx->regs.ds,arg2,read_u16(ctx),sizeof(uint16_t));
+		}
+		break;
 	case 0xcc: //int (3)
 		emu86_int(ctx,3);
 		break;
