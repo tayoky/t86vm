@@ -236,6 +236,15 @@ int emu86i(t86vm_ctx_t *ctx){
 		op = read_u8(ctx);
 		break;
 	}
+
+	uint8_t rep = 0;
+
+	switch(op){
+	case 0xf3: //rep/repe/repz
+		rep = op;
+		op = read_u8(ctx);
+		break;
+	}
 	
 	int32_t arg1;
 	int32_t arg2;
@@ -571,16 +580,18 @@ int emu86i(t86vm_ctx_t *ctx){
 	case 0xad: //lodsw
 		;size_t size = op % 2 ? 2 : 1;
 		size_t dis = ctx->regs.eflags& EFLAGS_DF ? -size : size;
+		for(;;){
+			if(rep && !ctx->regs.cx)break;
 
 		switch(op/2*2){
 		case 0xa4: //mov
 			;uint32_t data = emu86_read(ctx,ctx->regs.ds,(uint16_t)ctx->regs.si,size);
-			emu86_write(ctx,ctx->regs.ds,(uint16_t)ctx->regs.di,data,size);
+			emu86_write(ctx,ctx->regs.es,(uint16_t)ctx->regs.di,data,size);
 			ctx->regs.si += dis;
 			ctx->regs.di += dis;
 			break;
 		case 0xaa: //stoxx
-			emu86_write(ctx,ctx->regs.ds,(uint16_t)ctx->regs.di,(uint16_t)(size == 1 ? *reg8(ctx,0) : *reg(ctx,0)),size);
+			emu86_write(ctx,ctx->regs.es,(uint16_t)ctx->regs.di,(uint16_t)(size == 1 ? *reg8(ctx,0) : *reg(ctx,0)),size);
 			ctx->regs.di += dis;
 			break;
 		case 0xac: //lodxx
@@ -591,6 +602,14 @@ int emu86i(t86vm_ctx_t *ctx){
 			}
 			ctx->regs.si += dis;
 			break;
+		}
+		//TODO : check flags (repz/repnz)
+		if(rep){
+			//FIXME : set flags ???
+			ctx->regs.cx--;
+		} else {
+			break;
+		}
 		}
 		break;
 	case 0xb0:
