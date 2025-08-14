@@ -17,7 +17,7 @@ int emul(t86vm_ctx_t *ctx){
 	memcpy(&ctx->ram[0x7c00],boot,sizeof(boot));
 
 	//now launch the floppy disk
-	ctx->regs.pc = 0x7c00;
-	printf("%d\n",emu86(ctx));
+	ctx->cpu.regs.pc = 0x7c00;
+	printf("%d\n",emu8086(ctx));
 	return 0;
 }

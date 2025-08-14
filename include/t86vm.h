@@ -23,6 +23,10 @@ typedef struct regs {
 	uint16_t eflags;
 } regs_t;
 
+typedef struct cpu8086 {
+	regs_t regs;
+} cpu8086_t;
+
 #define EFLAGS_CF (1 << 0)
 #define EFLAGS_PF (1 << 2)
 #define EFLAGS_AF (1 << 4)
@@ -34,7 +38,7 @@ typedef struct regs {
 
 typedef struct t86vm_ctx {
 	FILE *floppy;
-	regs_t regs;
+	cpu8086_t cpu;
 	size_t ram_size;
 	char *ram;
 	jmp_buf jmperr;
@@ -42,7 +46,9 @@ typedef struct t86vm_ctx {
 } t86vm_ctx_t;
 
 int emul(t86vm_ctx_t *);
-int emu86(t86vm_ctx_t *);
+int emu8086(t86vm_ctx_t *);
+uint32_t mem_read(t86vm_ctx_t *ctx,uint16_t seg,uint32_t addr,size_t size);
+void mem_write(t86vm_ctx_t *ctx,uint16_t seg,uint32_t addr,uint32_t data,size_t size);
 void error(const char *fmt,...);
 
 #endif

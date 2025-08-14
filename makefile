@@ -6,7 +6,7 @@ INCLUDEDIR = include
 
 VERSION = $(shell git describe --tags --always)
 
-SRC = $(shell find $(SRCDIR) -maxdepth 1 -name "*.c")
+SRC = $(shell find $(SRCDIR) -name "*.c")
 OBJ = $(SRC:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 
 CFLAGS += -I$(INCLUDEDIR)
