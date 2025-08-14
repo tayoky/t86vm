@@ -1,0 +1,12 @@
+;test far jump
+org 0x7c00
+jmp 0x00:continue
+mov ax, 0xdd
+hlt
+continue:
+mov ax, 0x4847
+hlt
+
+times 510 - ($ - $$) db 0x00
+db 0x55
+db 0xaa
