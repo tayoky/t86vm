@@ -1,3 +1,4 @@
+#include <string.h>
 #include "t86vm.h"
 
 //an simple 8086 emulator wrote by tayoky
@@ -6,12 +7,12 @@
 
 uint8_t read_u8(t86vm_ctx_t *ctx){
 	uint32_t addr = comp_addr(ctx->cpu.regs.cs,ctx->cpu.regs.pc++);
-	if(addr >= ctx->ram_size){
-		//OOB error
-		//TODO : trigger an int
-		error("OOB");
+	int error = 0;
+	uint8_t data = mem_read(ctx,addr,sizeof(uint8_t),&error);
+	if(error){
+		longjmp(ctx->jmperr,0);
 	}
-	return ctx->ram[addr];
+	return data;
 }
 
 uint16_t read_u16(t86vm_ctx_t *ctx){
@@ -21,26 +22,20 @@ uint16_t read_u16(t86vm_ctx_t *ctx){
 void emu86_write(t86vm_ctx_t *ctx,uint16_t seg,uint32_t addr,uint32_t data,size_t size){
 	uint32_t a = comp_addr(ctx->seg_overide >= 0 ? ctx->seg_overide : seg,addr);
 
-	if(a >= ctx->ram_size){
+	int error = 0;
+	mem_write(ctx,a,data,size,&error);
+	if(error){
 		longjmp(ctx->jmperr,0);
-	}
-
-	for(size_t i=0; i<size; i++){
-		ctx->ram[a + i] = (uint8_t)(data >> (i * 8));
 	}
 }
 
 uint32_t emu86_read(t86vm_ctx_t *ctx,uint16_t seg,uint32_t addr,size_t size){
 	uint32_t a = comp_addr(ctx->seg_overide >= 0 ? ctx->seg_overide : seg,addr);
-
-	if(a >= ctx->ram_size){
+		
+	int error = 0;
+	uint32_t data = mem_read(ctx,a,size,&error);
+	if(error){
 		longjmp(ctx->jmperr,0);
-	}
-
-	uint32_t data = 0;
-
-	for(size_t i=0; i<size; i++){
-		data |= ((uint8_t)ctx->ram[a + i]) << (i * 8);
 	}
 
 	return data;
@@ -188,11 +183,20 @@ void set_flags(t86vm_ctx_t *ctx,int32_t num){
 }
 
 //handle inttrtupt
-void emu86_int(t86vm_ctx_t *ctx,uint8_t n){
+//TODO : error handling in this shit
+static void emu86_int(t86vm_ctx_t *ctx,uint8_t n){
 	//printf("int %hhx\n",n);
-	if(n == 0x10 && *reg8(ctx,4) == 0xe){
+	/*if(n == 0x10 && *reg8(ctx,4) == 0xe){
 		printf("%c",*reg8(ctx,0));
-	}
+	}*/
+	//TODO : protected mode idt
+	push_u16(ctx,ctx->cpu.regs.eflags);
+	//FIXME : this should clear TF
+	ctx->cpu.regs.eflags &= ~EFLAGS_IF;
+	push_u16(ctx,ctx->cpu.regs.cs);
+	push_u16(ctx,ctx->cpu.regs.pc);
+	ctx->cpu.regs.pc = emu86_read(ctx,0x0000,n * 4,sizeof(uint16_t));
+	ctx->cpu.regs.cs = emu86_read(ctx,0x0000,n * 4 + 2,sizeof(uint16_t));
 }
 
 //handle i/o
@@ -377,6 +381,24 @@ int emu86i(t86vm_ctx_t *ctx){
 		break;
 	case 0x0e: //push (cs)
 		push_u16(ctx,ctx->cpu.regs.cs);
+		break;
+	case 0x0f: //lidt/lgdt
+		if(modrm(ctx,&arg1,&arg2) != 0){
+			longjmp(ctx->jmperr,0);	
+		}
+		//FIXME : ds by default ?
+		switch(arg1){
+		case 2: //lgdt
+			ctx->cpu.gdtr.limit = emu86_read(ctx,ctx->cpu.regs.ds,arg2,sizeof(uint16_t));
+			ctx->cpu.gdtr.base  = emu86_read(ctx,ctx->cpu.regs.ds,arg2,3);
+			break;
+		case 3: //lidt
+			ctx->cpu.idtr.limit = emu86_read(ctx,ctx->cpu.regs.ds,arg2,sizeof(uint16_t));
+			ctx->cpu.idtr.base  = emu86_read(ctx,ctx->cpu.regs.ds,arg2,3);
+			break;
+		default:
+			longjmp(ctx->jmperr,0);
+		}
 		break;
 		//no pop cs ???
 	case 0x16: //push (ss)
@@ -749,9 +771,22 @@ void emu86_dump(t86vm_ctx_t *ctx){
 	printf("eflags = %hx\n",ctx->cpu.regs.eflags);
 }
 
-int emu8086(t86vm_ctx_t *ctx){
+int cpu8086_emu(t86vm_ctx_t *ctx){
 	int ret;
-	while((ret = emu86i(ctx) )>= 0);
+	for(;;){
+		if(ctx->cpu.reset){
+			//reset the cpu
+			memset(&ctx->cpu,0,sizeof(cpu8086_t));
+			ctx->cpu.intr = -1;
+			ctx->cpu.regs.cs = 0xffff;
+		}
+		ret = emu86i(ctx);
+		if(ret < 0)break;
+	}
 	emu86_dump(ctx);
 	return ret;
+}
+
+void cpu8086_reset(cpu8086_t *cpu){
+	cpu->reset = 1;
 }

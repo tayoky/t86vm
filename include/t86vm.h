@@ -5,7 +5,7 @@
 #include <setjmp.h>
 #include <stdio.h>
 
-typedef struct regs {
+typedef struct cpu8086_regs {
 	int16_t ax;
 	int16_t bx;
 	int16_t cx;
@@ -21,10 +21,19 @@ typedef struct regs {
 	uint16_t ds;
 	uint16_t fs;
 	uint16_t eflags;
-} regs_t;
+} cpu8086_regs_t;
+
+typedef struct cpu8086_dtr {
+	uint16_t limit;
+	uint32_t base;
+} cpu8086_dtr_t;
 
 typedef struct cpu8086 {
-	regs_t regs;
+	cpu8086_regs_t regs;
+	cpu8086_dtr_t gdtr;
+	cpu8086_dtr_t idtr;
+	int intr; //interrupt line
+	int reset; //reset line
 } cpu8086_t;
 
 #define EFLAGS_CF (1 << 0)
@@ -36,9 +45,16 @@ typedef struct cpu8086 {
 #define EFLAGS_DF (1 << 10)
 #define EFLAGS_OF (1 << 11)
 
+typedef struct eprom {
+	uint32_t base;
+	uint32_t size;
+	char *data;
+} eprom_t;
+
 typedef struct t86vm_ctx {
 	FILE *floppy;
 	cpu8086_t cpu;
+	eprom_t *bios;
 	size_t ram_size;
 	char *ram;
 	jmp_buf jmperr;
@@ -46,9 +62,12 @@ typedef struct t86vm_ctx {
 } t86vm_ctx_t;
 
 int emul(t86vm_ctx_t *);
-int emu8086(t86vm_ctx_t *);
-uint32_t mem_read(t86vm_ctx_t *ctx,uint16_t seg,uint32_t addr,size_t size);
-void mem_write(t86vm_ctx_t *ctx,uint16_t seg,uint32_t addr,uint32_t data,size_t size);
+int cpu8086_emu(t86vm_ctx_t *);
+void cpu8086_reset(cpu8086_t *);
+eprom_t *eprom_open(const char *path);
+uint32_t eprom_read(eprom_t *eprom,uint32_t addr,size_t size,int *error);
+uint32_t mem_read(t86vm_ctx_t *ctx,uint32_t addr,size_t size,int *error);
+void mem_write(t86vm_ctx_t *ctx,uint32_t addr,uint32_t data,size_t size,int *error);
 void error(const char *fmt,...);
 
 #endif

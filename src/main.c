@@ -22,7 +22,22 @@ int main(int argc,char **argv){
 		}
 		if(OPT("-m") || OPT("--memory")){
 			i++;
+			if(i>=argc)goto missing_operand;
 			ctx.ram_size = strtoul(argv[i],NULL,0);
+			continue;
+		}
+		if(OPT("-b") || OPT("--bios")){
+			if(ctx.bios){
+				error("cannot add multiples bios");
+				return 1;
+			}
+			i++;
+			if(i>=argc)goto missing_operand;
+			ctx.bios = eprom_open(argv[i]);
+			if(!ctx.bios){
+				perror(argv[i]);
+				return 1;
+			}
 			continue;
 		}
 		error("unknow option : %s",argv[i]);
@@ -33,6 +48,11 @@ missing_operand:
 	}
 
 	ctx.ram = malloc(ctx.ram_size);
+	if(!ctx.bios)ctx.bios = eprom_open("bios.rom");
+	if(!ctx.bios){
+		perror("cannot open default bios");
+		return 1;
+	}
 	
 	return emul(&ctx) < 0 ? 1 : 0;
 }

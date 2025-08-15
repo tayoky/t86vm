@@ -19,6 +19,10 @@ $(BUILDDIR)/t86vm : $(OBJ)
 	@mkdir -p $(shell dirname $@)
 	@$(CC) -o $@ $^ $(CFLAGS)
 
+$(BUILDDIR)/bios.rom : bios.nasm
+	@echo '[assembling $^]'
+	@mkdir -p $(shell dirname $@)
+	@nasm -o $@ -f bin $^
 
 $(BUILDDIR)/%.o : $(SRCDIR)/%.c 
 	@echo '[compiling $^]'
