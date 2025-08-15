@@ -4,6 +4,7 @@ void mem_write(t86vm_ctx_t *ctx,uint32_t addr,uint32_t data,size_t size,int *err
 	*error = 0;
 	if(addr >= ctx->ram_size){
 		*error = 1;
+		return;
 	}
 
 	for(size_t i=0; i<size; i++){
@@ -19,6 +20,7 @@ uint32_t mem_read(t86vm_ctx_t *ctx,uint32_t addr,size_t size,int *error){
 	}
 	if(addr >= ctx->ram_size){
 		*error = 1;
+		return 0;
 	}
 
 	uint32_t data = 0;

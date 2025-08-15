@@ -8,7 +8,7 @@
 int main(int argc,char **argv){
 	t86vm_ctx_t ctx;
 	memset(&ctx,0,sizeof(ctx));
-	ctx.ram_size = 1024 * 1024;
+	ctx.ram_size = 1024 * 512;
 	for(int i=1; i<argc; i++){
 		if(OPT("-f")  || OPT("--floppy")){
 			i++;

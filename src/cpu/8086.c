@@ -683,6 +683,11 @@ int emu86i(t86vm_ctx_t *ctx){
 	case 0xcd: //int (imm8)
 		emu86_int(ctx,read_u8(ctx));
 		break;
+	case 0xcf: //iret
+		ctx->cpu.regs.pc = pop_u16(ctx);
+		ctx->cpu.regs.cs = pop_u16(ctx);
+		ctx->cpu.regs.eflags = (ctx->cpu.regs.eflags & 0xff00) | pop_u16(ctx);
+		break;
 	case 0xe4: //in (port imm8 to al) b
 		*reg8(ctx,0) = (uint16_t)emu86_in(ctx,read_u8(ctx),sizeof(uint8_t));
 		break;
@@ -779,6 +784,10 @@ int cpu8086_emu(t86vm_ctx_t *ctx){
 			memset(&ctx->cpu,0,sizeof(cpu8086_t));
 			ctx->cpu.intr = -1;
 			ctx->cpu.regs.cs = 0xffff;
+		}
+		if(ctx->cpu.intr >= 0){
+			emu86_int(ctx,ctx->cpu.intr);
+			ctx->cpu.intr = -1;
 		}
 		ret = emu86i(ctx);
 		if(ret < 0)break;
