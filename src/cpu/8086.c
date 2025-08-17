@@ -109,6 +109,25 @@ static uint16_t *seg(t86vm_ctx_t *ctx,uint8_t seg){
 	}
 }
 
+void emu86_dump(t86vm_ctx_t *ctx){
+	puts("dump :");
+	printf("ax = %hx\n",ctx->cpu.regs.ax);
+	printf("bx = %hx\n",ctx->cpu.regs.bx);
+	printf("cx = %hx\n",ctx->cpu.regs.cx);
+	printf("dx = %hx\n",ctx->cpu.regs.dx);
+	printf("sp = %hx\n",ctx->cpu.regs.sp);
+	printf("bp = %hx\n",ctx->cpu.regs.bp);
+	printf("si = %hx\n",ctx->cpu.regs.si);
+	printf("di = %hx\n",ctx->cpu.regs.di);
+	printf("es = %hx\n",ctx->cpu.regs.es);
+	printf("cs = %hx\n",ctx->cpu.regs.cs);
+	printf("ds = %hx\n",ctx->cpu.regs.ds);
+	printf("ss = %hx\n",ctx->cpu.regs.ss);
+	printf("fs = %hx\n",ctx->cpu.regs.fs);
+	printf("pc = %hx\n",ctx->cpu.regs.pc);
+	printf("eflags = %hx\n",ctx->cpu.regs.eflags);
+}
+
 // 1 on reg, 0 on mem
 int modrm(t86vm_ctx_t *ctx,int32_t *reg,int32_t *arg2){
 	uint8_t mod = read_u8(ctx);
@@ -476,7 +495,7 @@ int emu86i(t86vm_ctx_t *ctx){
 	case 0x7b: //jxx (short) b
 		arg1 = (int8_t)read_u8(ctx);
 		uint16_t flag;
-		switch(op % 2){
+		switch(op/2*2){
 		case 0x70: //jo/jno
 			flag = EFLAGS_OF;
 			break;
@@ -488,6 +507,7 @@ int emu86i(t86vm_ctx_t *ctx){
 			break;
 		case 0x76: //jbe/ja
 			flag = EFLAGS_CF | EFLAGS_ZF;
+			break;
 		case 0x78: //js/jns
 			flag = EFLAGS_SF;
 			break;
@@ -497,11 +517,11 @@ int emu86i(t86vm_ctx_t *ctx){
 		}
 		if(op % 2){
 			if(!(ctx->cpu.regs.eflags & flag)){
-		ctx->cpu.regs.pc += arg1;
+				ctx->cpu.regs.pc += arg1;
 			}
 		} else {
 			if(ctx->cpu.regs.eflags & flag){
-		ctx->cpu.regs.pc += arg1;
+				ctx->cpu.regs.pc += arg1;
 			}
 		}
 		break;
@@ -802,25 +822,6 @@ int emu86i(t86vm_ctx_t *ctx){
 	return 0;
 }
 
-void emu86_dump(t86vm_ctx_t *ctx){
-	puts("dump :");
-	printf("ax = %hx\n",ctx->cpu.regs.ax);
-	printf("bx = %hx\n",ctx->cpu.regs.bx);
-	printf("cx = %hx\n",ctx->cpu.regs.cx);
-	printf("dx = %hx\n",ctx->cpu.regs.dx);
-	printf("sp = %hx\n",ctx->cpu.regs.sp);
-	printf("bp = %hx\n",ctx->cpu.regs.bp);
-	printf("si = %hx\n",ctx->cpu.regs.si);
-	printf("di = %hx\n",ctx->cpu.regs.di);
-	printf("es = %hx\n",ctx->cpu.regs.es);
-	printf("cs = %hx\n",ctx->cpu.regs.cs);
-	printf("ds = %hx\n",ctx->cpu.regs.ds);
-	printf("ss = %hx\n",ctx->cpu.regs.ss);
-	printf("fs = %hx\n",ctx->cpu.regs.fs);
-	printf("pc = %hx\n",ctx->cpu.regs.pc);
-	printf("eflags = %hx\n",ctx->cpu.regs.eflags);
-}
-
 int cpu8086_emu(t86vm_ctx_t *ctx){
 	int ret;
 	for(;;){
@@ -834,6 +835,7 @@ int cpu8086_emu(t86vm_ctx_t *ctx){
 			emu86_int(ctx,ctx->cpu.intr);
 			ctx->cpu.intr = -1;
 		}
+		//printf("%hx\n",ctx->cpu.regs.pc);
 		ret = emu86i(ctx);
 		if(ret < 0)break;
 	}
