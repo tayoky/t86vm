@@ -232,6 +232,34 @@ uint32_t emu86_in(t86vm_ctx_t *ctx,uint16_t port,size_t size){
 	return 0;
 }
 
+int32_t alu_op(t86vm_ctx_t *ctx,uint8_t op,int32_t arg1,int32_t arg2){
+	//FIXME : i think SF might be broken on bits ops
+	//TODO : CF and OF flags
+	ctx->cpu.regs.eflags &= ~(EFLAGS_SF | EFLAGS_AF | EFLAGS_SF | EFLAGS_ZF);
+	switch(op){
+	case 0: //add
+		arg1 += arg2;
+		break;
+	case 1: //or
+		arg1 |= arg2;
+		break;
+	case 4: //and
+		arg1 &= arg2;
+		break;
+	case 7: //cmp
+	case 5: //sub
+		//TODO : cary + overflow
+		arg1 -= arg2;
+		break;
+	case 0x6: //xor
+		arg1 ^= arg2;
+		break;
+	}
+
+	set_flags(ctx,arg1);
+	return arg1;
+}
+
 int emu86i(t86vm_ctx_t *ctx){
 
 	if(setjmp(ctx->jmperr)){
@@ -354,31 +382,8 @@ int emu86i(t86vm_ctx_t *ctx){
 				arg1 = *reg8(ctx,arg1);
 			}
 		}
-		//FIXME : i think SF might be broken on bits ops
-		//TODO : CF and OF flags
-		ctx->cpu.regs.eflags &= ~(EFLAGS_SF | EFLAGS_AF | EFLAGS_SF | EFLAGS_ZF);
-		switch((op/0x08)*0x08){
-		case 0x00: //add
-			arg1 += arg2;
-			break;
-		case 0x07: //or
-			arg1 |= arg2;
-			break;
-		case 0x20: //and
-			arg1 &= arg2;
-			break;
-		case 0x38: //cmp
-		case 0x28: //sub
-			//TODO : cary + overflow
-			arg1 -= arg2;
-			break;
-		case 0x30: //xor
-			error("xor");
-			arg1 ^= arg2;
-			break;
-		}
-
-		set_flags(ctx,arg1);
+		
+		arg1 = alu_op(ctx,op/8,arg1,arg2);
 
 		if(op >= 0x38){
 			//don't store anything for cmp
@@ -523,6 +528,38 @@ int emu86i(t86vm_ctx_t *ctx){
 			if(ctx->cpu.regs.eflags & flag){
 				ctx->cpu.regs.pc += arg1;
 			}
+		}
+		break;
+	case 0x80:
+	case 0x82: //grp1 (r/m and imm8) b
+	case 0x81: //grp1 (r/m and imm) v
+	case 0x83: //grp1 (r/m and imm8) v
+		if((isreg = modrm(ctx,&arg1,&arg2))){
+			arg3 = op % 2 ? *reg(ctx,arg1) : *reg8(ctx,arg1);
+		} else {
+			arg3 = emu86_read(ctx,ctx->cpu.regs.ds,arg2,op % 2 ? sizeof(int16_t) : sizeof(uint8_t));
+		}
+
+		int32_t imm;
+		if(op == 0x81){
+			imm = (int16_t)read_u16(ctx);
+		} else {
+			imm = (int8_t)read_u8(ctx);
+		}
+
+		arg3 = alu_op(ctx,arg1,arg3,imm);
+
+		//don't place back for cmp
+		if(arg1 == 7)break;
+		
+		if(isreg){
+			if(op % 2){
+				*reg(ctx,arg2) = arg3;
+			} else {
+				*reg8(ctx,arg2) = arg3;
+			}
+		} else {
+			emu86_write(ctx,ctx->cpu.regs.ds,arg3,arg2,op % 2 ? sizeof(uint16_t) : sizeof(uint8_t));
 		}
 		break;
 	case 0x84: //test (reg and r/m) b
