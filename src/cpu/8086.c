@@ -6,10 +6,11 @@
 #define comp_addr(seg,reg) (((seg) << 4) | (reg))
 
 uint8_t read_u8(t86vm_ctx_t *ctx){
-	uint32_t addr = comp_addr(ctx->cpu.regs.cs,ctx->cpu.regs.pc++);
-	int error = 0;
-	uint8_t data = mem_read(ctx,addr,sizeof(uint8_t),&error);
-	if(error){
+	uint32_t addr = comp_addr(ctx->cpu.regs.cs,(uint16_t)ctx->cpu.regs.pc++);
+	int e = 0;
+	uint8_t data = mem_read(ctx,addr,sizeof(uint8_t),&e);
+	if(e){
+		error("fetch pf : %x",addr);
 		longjmp(ctx->jmperr,0);
 	}
 	return data;
@@ -22,9 +23,10 @@ uint16_t read_u16(t86vm_ctx_t *ctx){
 void emu86_write(t86vm_ctx_t *ctx,uint16_t seg,uint32_t addr,uint32_t data,size_t size){
 	uint32_t a = comp_addr(ctx->seg_overide >= 0 ? ctx->seg_overide : seg,addr);
 
-	int error = 0;
-	mem_write(ctx,a,data,size,&error);
-	if(error){
+	int e = 0;
+	mem_write(ctx,a,data,size,&e);
+	if(e){
+		error("pf : %x",addr);
 		longjmp(ctx->jmperr,0);
 	}
 }
@@ -32,9 +34,10 @@ void emu86_write(t86vm_ctx_t *ctx,uint16_t seg,uint32_t addr,uint32_t data,size_
 uint32_t emu86_read(t86vm_ctx_t *ctx,uint16_t seg,uint32_t addr,size_t size){
 	uint32_t a = comp_addr(ctx->seg_overide >= 0 ? ctx->seg_overide : seg,addr);
 		
-	int error = 0;
-	uint32_t data = mem_read(ctx,a,size,&error);
-	if(error){
+	int e = 0;
+	uint32_t data = mem_read(ctx,a,size,&e);
+	if(e){
+		perror("pf");
 		longjmp(ctx->jmperr,0);
 	}
 
