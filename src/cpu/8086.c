@@ -105,7 +105,7 @@ static uint16_t *seg(t86vm_ctx_t *ctx,uint8_t seg){
 		return &ctx->cpu.regs.fs;
 	default:
 		error("unknow seg %d",reg);
-		return NULL;
+		longjmp(ctx->jmperr,0);
 	}
 }
 
@@ -734,6 +734,48 @@ int emu86i(t86vm_ctx_t *ctx){
 		break;
 	case 0xef: //out (port dx to ax) w
 		emu86_out(ctx,ctx->cpu.regs.dx,ctx->cpu.regs.ax,sizeof(uint16_t));
+		break;
+	case 0xf6: //grp3 (r/m) b
+	case 0xf7: //grp3 (r/m) v
+		//TODO sign might be fucked here
+		;isreg = modrm(ctx,&arg1,&arg2);
+		if(isreg){
+			if(op == 0xf6){
+				arg3 = *reg8(ctx,arg2);
+			} else {
+				arg3 = *reg(ctx,arg2);
+			}
+		} else {
+			arg3 = emu86_read(ctx,ctx->cpu.regs.ds,arg2,op == 0xf6 ? sizeof(uint8_t) : sizeof(uint16_t));
+		}
+		ctx->cpu.regs.eflags &= ~(EFLAGS_OF | EFLAGS_CF);
+		switch(arg1){
+		case 0: //test
+			;int32_t imm = op == 0xf6 ? (int8_t)read_u8(ctx) : (int16_t)read_u16(ctx);
+			arg3 &= imm;
+			break;
+		case 2: //not
+			arg3 = ~arg3;
+			break;
+		case 3: //neg
+			arg3 = -arg3; //FIXME:not sure that work
+			break;
+		default:
+			error("grp 3 unknow subinst : %d",arg1);
+			longjmp(ctx->jmperr,0);
+		}
+		set_flags(ctx,arg3);
+		//don't store for test
+		if(arg1 == 0)break;
+		if(isreg){
+			if(op == 0xf6){
+				*reg8(ctx,arg2) = arg3;
+			} else {
+				*reg(ctx,arg2) = arg3;
+			}
+		} else {
+			emu86_write(ctx,ctx->cpu.regs.ds,arg2,arg3,op == 0xf6 ? sizeof(uint8_t) : sizeof(uint16_t));
+		}
 		break;
 	case 0xf8: //clc
 		ctx->cpu.regs.eflags &= ~EFLAGS_CF;
