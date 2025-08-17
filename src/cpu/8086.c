@@ -525,6 +525,24 @@ int emu86i(t86vm_ctx_t *ctx){
 			}
 		}
 		break;
+	case 0x84: //test (reg and r/m) b
+		//FIXME : fucked sign ?
+		if(modrm(ctx,&arg1,&arg2)){
+			arg2 = *reg8(ctx,arg1);
+		} else {
+			arg2 = emu86_read(ctx,ctx->cpu.regs.ds,arg2,sizeof(uint8_t));
+		}
+		set_flags(ctx,arg1 & arg2);
+		break;
+	case 0x85: //test (reg and r/m) v
+		//FIXME : fucked sign ?
+		if(modrm(ctx,&arg1,&arg2)){
+			arg2 = *reg(ctx,arg1);
+		} else {
+			arg2 = emu86_read(ctx,ctx->cpu.regs.ds,arg2,sizeof(uint16_t));
+		}
+		set_flags(ctx,arg1 & arg2);
+		break;
 	case 0x86: //xchg (reg an r/m) b
 		if(modrm(ctx,&arg1,&arg2)){
 			uint8_t tmp = *reg8(ctx,arg1);
