@@ -14,6 +14,19 @@ start:
 	sti
 ;test the interupt
 	int 0x10
+;test loop
+	mov cx, 16
+	xor ax, ax
+l:
+	out 0x80, ax
+	inc ax
+	loop l
+;now test js
+	mov bx, 0x8000
+	test bx, bx
+	js js_good
+	xor bx, bx
+js_good:
 	hlt
 
 test_handler:

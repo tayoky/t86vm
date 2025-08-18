@@ -3,7 +3,7 @@
 
 //an simple 8086 emulator wrote by tayoky
 
-#define comp_addr(seg,reg) (((seg) << 4) | (reg))
+#define comp_addr(seg,reg) (((seg) << 4) + (reg))
 
 uint8_t read_u8(t86vm_ctx_t *ctx){
 	uint32_t addr = comp_addr(ctx->cpu.regs.cs,(uint16_t)ctx->cpu.regs.pc++);
@@ -765,6 +765,19 @@ int emu86i(t86vm_ctx_t *ctx){
 		ctx->cpu.regs.pc = pop_u16(ctx);
 		ctx->cpu.regs.cs = pop_u16(ctx);
 		ctx->cpu.regs.eflags = (ctx->cpu.regs.eflags & 0xff00) | pop_u16(ctx);
+		break;
+	case 0xe2: //loop (short b)
+		ctx->cpu.regs.cx--;
+		arg1 = (int8_t)read_u8(ctx);
+		if(ctx->cpu.regs.cx != 0){
+			ctx->cpu.regs.pc += arg1;
+		}
+		break;
+	case 0xe3: //jcxz (short b)
+		arg1 = (int8_t)read_u8(ctx);
+		if(ctx->cpu.regs.cx == 0){
+			ctx->cpu.regs.pc += arg1;
+		}
 		break;
 	case 0xe4: //in (port imm8 to al) b
 		*reg8(ctx,0) = (uint16_t)emu86_in(ctx,read_u8(ctx),sizeof(uint8_t));

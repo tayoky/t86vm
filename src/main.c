@@ -48,6 +48,7 @@ missing_operand:
 	}
 
 	ctx.ram = malloc(ctx.ram_size);
+	memset(ctx.ram,0,ctx.ram_size);
 	if(!ctx.bios)ctx.bios = eprom_open("bios.rom");
 	if(!ctx.bios){
 		perror("cannot open default bios");
